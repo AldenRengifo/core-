@@ -4,6 +4,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 const scene = new THREE.Scene();
+
 // reducir near para evitar recortes en algunos HMDs VR
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -21,14 +22,11 @@ document.body.appendChild(VRButton.createButton(renderer));
    ============================================================= */
 renderer.xr.addEventListener("sessionstart", () => {
   console.log('>> VR session started');
-  // pequeña espera para evitar race condition con carga de modelos / referencia XR
   setTimeout(() => {
     if (typeof nave !== 'undefined' && nave && nave.position) {
-      // colocar cámara detrás y por encima de la nave
       camera.position.set(nave.position.x, nave.position.y + 2, nave.position.z + 5);
       camera.lookAt(nave.position);
     } else {
-      // fallback seguro si la nave aún no está cargada
       camera.position.set(0, 3, 8);
       camera.lookAt(0, 1, -10);
     }
@@ -38,13 +36,12 @@ renderer.xr.addEventListener("sessionstart", () => {
 
 renderer.xr.addEventListener("sessionend", () => {
   console.log('>> VR session ended');
-  // Volver a vista normal de escritorio
   camera.position.set(0, 10, 90);
   camera.lookAt(0, 1, -10);
   camera.updateProjectionMatrix();
 });
 
-// Skybox - con manejo de errores
+// Skybox
 const loaderCube = new THREE.CubeTextureLoader();
 loaderCube.setPath('skybox/');
 const skyboxTexture = loaderCube.load([
@@ -58,24 +55,6 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableRotate = false;
 controls.enablePan = false;
 controls.enableZoom = false;
-
-/* ===========================
-   🔊 AUDIO DE EXPLOSIÓN (con fallback)
-   =========================== */
-const explosionSound = new Audio();
-explosionSound.src = "explosion.mp3";
-explosionSound.volume = 0.7;
-explosionSound.preload = "auto";
-
-function playExplosion() {
-    try {
-        const s = explosionSound.cloneNode();
-        s.volume = 0.7;
-        s.play().catch(e => console.log('Error audio:', e));
-    } catch (error) {
-        console.log('Audio no disponible');
-    }
-}
 
 /* VARIABLES DEL JUEGO */
 let nave = null;
@@ -181,8 +160,6 @@ function addStar() {
     scene.add(star);
     stars.push(star);
 }
-
-// Crear estrellas
 for (let i = 0; i < 300; i++) addStar();
 
 /* NAVE */
@@ -202,7 +179,6 @@ function crearNaveBasica() {
     scene.add(nave);
     naveBox = new THREE.Box3().setFromObject(nave);
     naveCargada = true;
-    console.log('🚀 Nave básica creada');
 }
 crearNaveBasica();
 
@@ -293,7 +269,6 @@ function addObstacle(path) {
 
 for (let i = 0; i < 6; i++) addObstacle("meteorito.fbx");
 
-
 /* ILUMINACIÓN */
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 
@@ -371,8 +346,6 @@ function triggerGameOver() {
         crearExplosion(nave.position);
         nave.visible = false;
     }
-    
-    playExplosion();
     
     if (score > bestScore) {
         bestScore = score;
@@ -537,7 +510,6 @@ function animate() {
         
         explosiones.forEach((expl, index) => {
             const positions = expl.geometry.attributes.position.array;
-            const colors = expl.geometry.attributes.color.array;
             
             for (let i = 0; i < positions.length; i += 3) {
                 positions[i] += expl.userData.vel[i];
@@ -584,4 +556,5 @@ document.body.style.padding = '0';
 document.body.style.overflow = 'hidden';
 document.body.style.background = '#000';
 
-console.log('🎯 Juego cargado');
+console.log('🎯 Juego cargado SIN AUDIO');
+
