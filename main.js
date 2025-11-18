@@ -16,8 +16,8 @@ const camera = new THREE.PerspectiveCamera(
     0.01,
     1000
 );
-// Posición inicial de la cámara fuera de la nave
-camera.position.set(0, 5, 15);
+// Posición inicial de la cámara más alejada de la nave
+camera.position.set(0, 8, 25);
 playerRig.add(camera);
 
 /* ====================== RENDERER ====================== */
@@ -48,9 +48,9 @@ renderer.xr.addEventListener("sessionstart", () => {
         if (nave) {
             // Sincronizar la posición del playerRig con la nave
             playerRig.position.set(nave.position.x, nave.position.y, nave.position.z);
-            // Posicionar la cámara detrás de la nave (coordenadas locales al playerRig)
-            camera.position.set(0, 1.5, 8); // Ajustado para VR
-            camera.lookAt(nave.position.x, nave.position.y, nave.position.z + 10); // Mirar hacia adelante
+            // Posicionar la cámara más alejada en VR
+            camera.position.set(0, 2, 12);
+            camera.lookAt(nave.position.x, nave.position.y, nave.position.z + 10);
         }
     }, 100);
 });
@@ -60,7 +60,7 @@ renderer.xr.addEventListener("sessionend", () => {
     // Mantener posición actual al salir de VR
     if (nave) {
         playerRig.position.copy(nave.position);
-        camera.position.set(0, 5, 15);
+        camera.position.set(0, 8, 25);
         camera.lookAt(nave.position);
     }
 });
@@ -100,6 +100,11 @@ let gameTime = 0;
 let velocidadBase = 1.2;
 let gameOver = false;
 
+// Variables para controles de Xbox
+let gamepadConnected = false;
+let gamepadIndex = null;
+const deadZone = 0.15;
+
 const loaderFbx = new FBXLoader();
 const textureLoader = new THREE.TextureLoader();
 
@@ -121,8 +126,25 @@ welcomeMsg.style.backgroundColor = "rgba(0,0,0,0.8)";
 welcomeMsg.style.padding = "30px";
 welcomeMsg.style.borderRadius = "15px";
 welcomeMsg.style.border = "3px solid #FFFF00";
-welcomeMsg.innerHTML = "🚀 BIENVENIDO 🚀<br><span style='font-size: 16px; color: #00FFEA;'>El juego comenzará en 2 segundos...</span>";
+welcomeMsg.innerHTML = "🚀 BIENVENIDO 🚀<br><span style='font-size: 16px; color: #00FFEA;'>El juego comenzará en 5 segundos...</span>";
 document.body.appendChild(welcomeMsg);
+
+/* ====================== CONTADOR REGRESIVO ====================== */
+const countdownMsg = document.createElement("div");
+countdownMsg.style.position = "fixed";
+countdownMsg.style.top = "60%";
+countdownMsg.style.left = "50%";
+countdownMsg.style.transform = "translate(-50%, -50%)";
+countdownMsg.style.color = "#00FFEA";
+countdownMsg.style.fontFamily = "'Courier New', monospace";
+countdownMsg.style.fontSize = "48px";
+countdownMsg.style.fontWeight = "bold";
+countdownMsg.style.textAlign = "center";
+countdownMsg.style.textShadow = "0 0 15px #00FFEA, 0 0 30px #00FFEA";
+countdownMsg.style.letterSpacing = "3px";
+countdownMsg.style.zIndex = "1000";
+countdownMsg.style.display = "none";
+document.body.appendChild(countdownMsg);
 
 /* ====================== GAME OVER ====================== */
 const gameOverMsg = document.createElement("div");
@@ -143,7 +165,7 @@ gameOverMsg.style.backgroundColor = "rgba(0,0,0,0.9)";
 gameOverMsg.style.padding = "30px";
 gameOverMsg.style.borderRadius = "15px";
 gameOverMsg.style.border = "3px solid #FF0055";
-gameOverMsg.innerHTML = "💥 GAME OVER 💥<br><span style='font-size: 16px; color: #FFFFFF;'>Pulsa R para reiniciar</span>";
+gameOverMsg.innerHTML = "💥 GAME OVER 💥<br><span style='font-size: 16px; color: #FFFFFF;'>Pulsa R o Botón A para reiniciar</span>";
 document.body.appendChild(gameOverMsg);
 
 /* ====================== ESTRELLAS ====================== */
@@ -285,6 +307,62 @@ const naveLight=new THREE.PointLight(0x00ff88,0.3,20);
 naveLight.position.set(0,0,25);
 scene.add(naveLight);
 
+/* ====================== CONTROLES XBOX ====================== */
+function updateGamepadState() {
+    if (!gamepadConnected || gamepadIndex === null) return;
+    
+    const gamepad = navigator.getGamepads()[gamepadIndex];
+    if (!gamepad) return;
+
+    // Analógicos izquierdos (ejes 0 y 1) para movimiento
+    const leftStickX = Math.abs(gamepad.axes[0]) > deadZone ? gamepad.axes[0] : 0;
+    const leftStickY = Math.abs(gamepad.axes[1]) > deadZone ? gamepad.axes[1] : 0;
+
+    // Aplicar movimiento con el stick izquierdo
+    if (!gamePaused && !gameOver && naveCargada) {
+        targetX = leftStickX * 30;
+        targetY = -leftStickY * 20; // Invertir Y para que sea intuitivo
+    }
+
+    // Botón A (índice 0) para reiniciar
+    if (gamepad.buttons[0].pressed) {
+        if (gameOver) {
+            reiniciarJuego();
+        }
+    }
+
+    // Botón B (índice 1) como alternativa para reiniciar
+    if (gamepad.buttons[1].pressed) {
+        if (gameOver) {
+            reiniciarJuego();
+        }
+    }
+
+    // Botón Start (índice 9) para pausar/reanudar
+    if (gamepad.buttons[9].pressed) {
+        if (!buttonCooldown) {
+            gamePaused = !gamePaused;
+            buttonCooldown = true;
+            setTimeout(() => { buttonCooldown = false; }, 300);
+        }
+    }
+}
+
+let buttonCooldown = false;
+
+// Detectar conexión/desconexión de gamepad
+window.addEventListener("gamepadconnected", (e) => {
+    console.log("🎮 Gamepad conectado:", e.gamepad.id);
+    gamepadConnected = true;
+    gamepadIndex = e.gamepad.index;
+});
+
+window.addEventListener("gamepaddisconnected", (e) => {
+    console.log("🎮 Gamepad desconectado:", e.gamepad.id);
+    gamepadConnected = false;
+    gamepadIndex = null;
+});
+
 /* ====================== MOVIMIENTO MOUSE ====================== */
 window.addEventListener("mousemove",(e)=>{
     if(gamePaused||!naveCargada||gameOver)return;
@@ -341,6 +419,13 @@ function reiniciarJuego() {
 /* ====================== TECLADO ====================== */
 window.addEventListener("keydown", (e) => {
     if (e.key === 'r' || e.key === 'R') {
+        if (gameOver) {
+            reiniciarJuego();
+        }
+    }
+    
+    // También permitir reinicio con Enter o Espacio
+    if (e.key === 'Enter' || e.key === ' ') {
         if (gameOver) {
             reiniciarJuego();
         }
@@ -447,16 +532,33 @@ function crearExplosion(pos){
     explosiones.push(pts);
 }
 
-/* ====================== START ====================== */
-setTimeout(()=>{
-    welcomeMsg.style.display="none";
-    meteoritosActive=true;
-    startTime=Date.now();
-    gamePaused=false;
-},2000);
+/* ====================== START CON COUNTDOWN ====================== */
+setTimeout(() => {
+    welcomeMsg.style.display = "none";
+    countdownMsg.style.display = "block";
+    
+    let countdown = 5;
+    countdownMsg.textContent = countdown;
+    
+    const countdownInterval = setInterval(() => {
+        countdown--;
+        countdownMsg.textContent = countdown;
+        
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            countdownMsg.style.display = "none";
+            meteoritosActive = true;
+            startTime = Date.now();
+            gamePaused = false;
+        }
+    }, 1000);
+}, 2000);
 
 /* ====================== LOOP ====================== */
 renderer.setAnimationLoop(()=>{
+    // Actualizar controles de Xbox en cada frame
+    updateGamepadState();
+    
     if(!gamePaused && !gameOver){
         actualizarDificultad();
 
@@ -473,10 +575,6 @@ renderer.setAnimationLoop(()=>{
             playerRig.position.x = nave.position.x;
             playerRig.position.y = nave.position.y;
             playerRig.position.z = nave.position.z;
-            
-            // La cámara siempre mira hacia adelante desde la perspectiva del playerRig
-            // No necesitamos lookAt aquí porque la cámara ya está orientada correctamente
-            // en relación al playerRig
         }
 
         stars.forEach(star=>{
@@ -568,4 +666,4 @@ document.body.style.padding='0';
 document.body.style.overflow='hidden';
 document.body.style.background='#000';
 
-console.log('🎯 Juego cargado VERSION VR + CAMARA TERCERA PERSONA 🌎');
+console.log('🎯 Juego cargado VERSION VR + CAMARA ALEJADA + COUNTDOWN 5s 🌎');
