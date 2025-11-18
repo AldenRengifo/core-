@@ -39,21 +39,30 @@ document.body.appendChild(VRButton.createButton(renderer));
 renderer.xr.addEventListener("sessionstart", () => {
     console.log(">> VR START");
 
+    // Asegurarnos de que la nave sea visible
+    if (nave) {
+        nave.visible = true;
+    }
+
     setTimeout(() => {
-        // Posición de cámara en tercera persona cuando inicia VR
-        playerRig.position.set(0, 1.6, 0);
-        camera.position.set(0, 0.5, 3); // Cámara detrás de la nave
         if (nave) {
-            camera.lookAt(nave.position);
+            // Sincronizar la posición del playerRig con la nave
+            playerRig.position.set(nave.position.x, nave.position.y, nave.position.z);
+            // Posicionar la cámara detrás de la nave (coordenadas locales al playerRig)
+            camera.position.set(0, 1.5, 8); // Ajustado para VR
+            camera.lookAt(nave.position.x, nave.position.y, nave.position.z + 10); // Mirar hacia adelante
         }
-    }, 60);
+    }, 100);
 });
 
 renderer.xr.addEventListener("sessionend", () => {
     console.log(">> VR END");
     // Mantener posición actual al salir de VR
-    camera.position.set(0, 5, 15);
-    camera.lookAt(0, 0, 0);
+    if (nave) {
+        playerRig.position.copy(nave.position);
+        camera.position.set(0, 5, 15);
+        camera.lookAt(nave.position);
+    }
 });
 
 /* ====================== SKYBOX ====================== */
@@ -460,13 +469,14 @@ renderer.setAnimationLoop(()=>{
             nave.rotation.z = (targetX - nave.position.x)*0.02;
             nave.rotation.x = (targetY - nave.position.y)*0.01;
             
-            // La cámara sigue a la nave desde atrás (vista en tercera persona)
+            // El playerRig siempre sigue a la nave
             playerRig.position.x = nave.position.x;
             playerRig.position.y = nave.position.y;
-            playerRig.position.z = nave.position.z - 10; // 10 unidades detrás de la nave
+            playerRig.position.z = nave.position.z;
             
-            // La cámara siempre mira hacia la nave
-            camera.lookAt(nave.position);
+            // La cámara siempre mira hacia adelante desde la perspectiva del playerRig
+            // No necesitamos lookAt aquí porque la cámara ya está orientada correctamente
+            // en relación al playerRig
         }
 
         stars.forEach(star=>{
