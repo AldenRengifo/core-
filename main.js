@@ -16,8 +16,9 @@ const camera = new THREE.PerspectiveCamera(
     0.01,
     1000
 );
-camera.position.set(0, 10, 90);
-playerRig.add(camera); // <-- ahora la cámara pertenece al rig
+// Posición inicial de la cámara fuera de la nave
+camera.position.set(0, 5, 15);
+playerRig.add(camera);
 
 /* ====================== RENDERER ====================== */
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -39,23 +40,20 @@ renderer.xr.addEventListener("sessionstart", () => {
     console.log(">> VR START");
 
     setTimeout(() => {
+        // Posición de cámara en tercera persona cuando inicia VR
+        playerRig.position.set(0, 1.6, 0);
+        camera.position.set(0, 0.5, 3); // Cámara detrás de la nave
         if (nave) {
-            playerRig.position.copy(nave.position);
-            camera.position.set(0, 2, 5); // detrás de la nave
             camera.lookAt(nave.position);
-        } else {
-            playerRig.position.set(0, 0, 0);
-            camera.position.set(0, 2, 5);
-            camera.lookAt(0, 1, -10);
         }
     }, 60);
 });
 
 renderer.xr.addEventListener("sessionend", () => {
     console.log(">> VR END");
-    playerRig.position.set(0, 0, 0);
-    camera.position.set(0, 10, 90);
-    camera.lookAt(0, 1, -10);
+    // Mantener posición actual al salir de VR
+    camera.position.set(0, 5, 15);
+    camera.lookAt(0, 0, 0);
 });
 
 /* ====================== SKYBOX ====================== */
@@ -91,6 +89,7 @@ let gamePaused = true;
 let startTime = Date.now();
 let gameTime = 0;
 let velocidadBase = 1.2;
+let gameOver = false;
 
 const loaderFbx = new FBXLoader();
 const textureLoader = new THREE.TextureLoader();
@@ -135,7 +134,7 @@ gameOverMsg.style.backgroundColor = "rgba(0,0,0,0.9)";
 gameOverMsg.style.padding = "30px";
 gameOverMsg.style.borderRadius = "15px";
 gameOverMsg.style.border = "3px solid #FF0055";
-gameOverMsg.innerHTML = "💥 GAME OVER 💥<br><span style='font-size: 16px; color: #FFFFFF;'>Reiniciando...</span>";
+gameOverMsg.innerHTML = "💥 GAME OVER 💥<br><span style='font-size: 16px; color: #FFFFFF;'>Pulsa R para reiniciar</span>";
 document.body.appendChild(gameOverMsg);
 
 /* ====================== ESTRELLAS ====================== */
@@ -279,7 +278,7 @@ scene.add(naveLight);
 
 /* ====================== MOVIMIENTO MOUSE ====================== */
 window.addEventListener("mousemove",(e)=>{
-    if(gamePaused||!naveCargada)return;
+    if(gamePaused||!naveCargada||gameOver)return;
     const rect=renderer.domElement.getBoundingClientRect();
     const nx=((e.clientX-rect.left)/rect.width)*2-1;
     const ny=-((e.clientY-rect.top)/rect.height)*2+1;
@@ -289,7 +288,7 @@ window.addEventListener("mousemove",(e)=>{
 
 /* ====================== TOUCH ====================== */
 window.addEventListener("touchmove",(e)=>{
-    if(gamePaused||!naveCargada)return;
+    if(gamePaused||!naveCargada||gameOver)return;
     e.preventDefault();
     const t=e.touches[0];
     const rect=renderer.domElement.getBoundingClientRect();
@@ -299,9 +298,49 @@ window.addEventListener("touchmove",(e)=>{
     targetY=ny*20;
 });
 
+/* ====================== REINICIAR JUEGO ====================== */
+function reiniciarJuego() {
+    gameOver = false;
+    gamePaused = false;
+    score = 0;
+    gameTime = 0;
+    velocidadBase = 1.2;
+    difficultySpeed = 0;
+    cameraShakeIntensity = 0;
+    
+    // Resetear nave
+    if (nave) {
+        nave.position.set(0, 0, 20);
+        nave.visible = true;
+    }
+    
+    // Resetear meteoritos
+    obstacles.forEach(obs => {
+        resetObstacle(obs);
+    });
+    
+    // Limpiar explosiones
+    explosiones.forEach(exp => {
+        scene.remove(exp);
+    });
+    explosiones.length = 0;
+    
+    gameOverMsg.style.display = "none";
+    startTime = Date.now();
+}
+
+/* ====================== TECLADO ====================== */
+window.addEventListener("keydown", (e) => {
+    if (e.key === 'r' || e.key === 'R') {
+        if (gameOver) {
+            reiniciarJuego();
+        }
+    }
+});
+
 /* ====================== DIFICULTAD ====================== */
 function actualizarDificultad(){
-    if(!gamePaused){
+    if(!gamePaused && !gameOver){
         gameTime=(Date.now()-startTime)/1000;
         if(gameTime>15 && Math.floor(gameTime)%15===0){
             if(velocidadBase<4.0){
@@ -314,19 +353,21 @@ function actualizarDificultad(){
 
 /* ====================== GAME OVER ====================== */
 function triggerGameOver(){
-    if(gamePaused)return;
-    gamePaused=true;
-    gameOverMsg.style.display="block";
-    cameraShakeIntensity=8;
-    if(naveCargada&&nave){
+    if(gamePaused || gameOver) return;
+    gameOver = true;
+    gamePaused = true;
+    gameOverMsg.style.display = "block";
+    cameraShakeIntensity = 8;
+    
+    if(naveCargada && nave){
         crearExplosion(nave.position);
-        nave.visible=false;
+        nave.visible = false;
     }
-    if(score>bestScore){
-        bestScore=score;
-        localStorage.setItem("bestScore",String(bestScore));
+    
+    if(score > bestScore){
+        bestScore = score;
+        localStorage.setItem("bestScore", String(bestScore));
     }
-    setTimeout(()=>location.reload(),2000);
 }
 
 /* ====================== PARTICULAS ====================== */
@@ -407,7 +448,7 @@ setTimeout(()=>{
 
 /* ====================== LOOP ====================== */
 renderer.setAnimationLoop(()=>{
-    if(!gamePaused){
+    if(!gamePaused && !gameOver){
         actualizarDificultad();
 
         if(naveCargada && nave){
@@ -418,6 +459,14 @@ renderer.setAnimationLoop(()=>{
             naveBox.setFromObject(nave);
             nave.rotation.z = (targetX - nave.position.x)*0.02;
             nave.rotation.x = (targetY - nave.position.y)*0.01;
+            
+            // La cámara sigue a la nave desde atrás (vista en tercera persona)
+            playerRig.position.x = nave.position.x;
+            playerRig.position.y = nave.position.y;
+            playerRig.position.z = nave.position.z - 10; // 10 unidades detrás de la nave
+            
+            // La cámara siempre mira hacia la nave
+            camera.lookAt(nave.position);
         }
 
         stars.forEach(star=>{
@@ -441,12 +490,12 @@ renderer.setAnimationLoop(()=>{
                 if(obs.userData && obs.userData.box)
                     obs.userData.box.setFromObject(obs);
 
-                if(nave && naveBox && obs.userData.box && naveBox.intersectsBox(obs.userData.box)){
+                if(nave && naveBox && obs.userData.box && naveBox.intersectsBox(obs.userData.box) && !gameOver){
                     triggerGameOver();
                     return;
                 }
 
-                if(obs.position.z > nave.position.z+30 && !obs.userData.puntosSumados){
+                if(obs.position.z > nave.position.z+30 && !obs.userData.puntosSumados && !gameOver){
                     score+=10;
                     bestScore=Math.max(score,bestScore);
                     obs.userData.puntosSumados=true;
@@ -509,4 +558,4 @@ document.body.style.padding='0';
 document.body.style.overflow='hidden';
 document.body.style.background='#000';
 
-console.log('🎯 Juego cargado VERSION VR + PLAYERRIG LISTO 🌎');
+console.log('🎯 Juego cargado VERSION VR + CAMARA TERCERA PERSONA 🌎');
