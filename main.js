@@ -46,18 +46,25 @@ renderer.xr.addEventListener("sessionstart", () => {
 
     setTimeout(() => {
         if (nave) {
-            // Sincronizar la posición del playerRig con la nave
-            playerRig.position.set(nave.position.x, nave.position.y, nave.position.z);
-            // Posicionar la cámara más alejada en VR
-            camera.position.set(0, 2, 12);
-            camera.lookAt(nave.position.x, nave.position.y, nave.position.z + 10);
+            // En VR, posicionar todo el playerRig detrás de la nave
+            // Esto crea un offset desde la posición de la nave
+            const offsetBehind = 12;
+            playerRig.position.set(
+                nave.position.x,
+                nave.position.y + 1.5, // Altura para vista en tercera persona
+                nave.position.z + offsetBehind
+            );
+            
+            // La cámara en VR será controlada por el headset
+            // pero estará posicionada relativamente al playerRig
+            console.log("VR: PlayerRig posicionado detrás de la nave");
         }
     }, 100);
 });
 
 renderer.xr.addEventListener("sessionend", () => {
     console.log(">> VR END");
-    // Mantener posición actual al salir de VR
+    // Al salir de VR, resetear el playerRig a la posición de la nave
     if (nave) {
         playerRig.position.copy(nave.position);
         camera.position.set(0, 8, 25);
@@ -412,6 +419,10 @@ function reiniciarJuego() {
     });
     explosiones.length = 0;
     
+    // Resetear playerRig
+    playerRig.position.set(0, 0, 0);
+    camera.position.set(0, 8, 25);
+    
     gameOverMsg.style.display = "none";
     startTime = Date.now();
 }
@@ -571,10 +582,15 @@ renderer.setAnimationLoop(()=>{
             nave.rotation.z = (targetX - nave.position.x)*0.02;
             nave.rotation.x = (targetY - nave.position.y)*0.01;
             
-            // El playerRig siempre sigue a la nave
-            playerRig.position.x = nave.position.x;
-            playerRig.position.y = nave.position.y;
-            playerRig.position.z = nave.position.z;
+            // En VR, el playerRig mantiene su offset detrás de la nave
+            // En modo normal, el playerRig sigue exactamente a la nave
+            if (renderer.xr.isPresenting) {
+                // En VR: mantener el offset establecido en sessionstart
+                // No hacer nada aquí, el offset ya está establecido
+            } else {
+                // En modo normal: playerRig sigue exactamente a la nave
+                playerRig.position.copy(nave.position);
+            }
         }
 
         stars.forEach(star=>{
@@ -666,4 +682,4 @@ document.body.style.padding='0';
 document.body.style.overflow='hidden';
 document.body.style.background='#000';
 
-console.log('🎯 Juego cargado VERSION VR + CAMARA ALEJADA + COUNTDOWN 5s 🌎');
+console.log('🎯 Juego cargado VERSION VR CORREGIDA + PLAYERRIG POSITION FIX 🌎');
